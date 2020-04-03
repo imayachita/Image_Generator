@@ -17,6 +17,12 @@ class Generator():
         self.height = height
 
     def gen(self):
+        '''
+        Yields generator object for training or evaluation without batching
+        Yields:
+            im: np.array of (1,width,height,1) of images
+            label: np.array of one-hot vector of label (1,num_labels)
+        '''
         feat = self.feat
         labels = self.labels
         width = self.width
@@ -33,7 +39,13 @@ class Generator():
             if i>=len(feat):
                 i=0
 
+
     def gen_test(self):
+        '''
+        Yields generator object to do prediction
+        Yields:
+            im: np.array of (1,width,height,1) of images
+        '''
         feat = self.feat
         width = self.width
         height = self.height
@@ -45,7 +57,16 @@ class Generator():
             yield im
             i+=1
 
+
     def gen_batching(self, batch_size):
+        '''
+        Yields generator object with batching of batch_size
+        Args:
+            batch_size (int): batch_size
+        Yields:
+            feat_batch: np.array of (batch_size,width,height,1) of images
+            label_batch: np.array of (batch_size,num_labels)
+        '''
         feat = self.feat
         labels = self.labels
         width = self.width
@@ -71,22 +92,41 @@ class Generator():
                 label_batch[i] = labels[index]
             yield feat_batch,label_batch
 
-    def on_next(self):
-        gen_obj = self.gen_test()
-        return next(gen_obj)
+    # def on_next(self):
+    #     '''
+    #     Advance to the next generator object
+    #     '''
+    #     gen_obj = self.gen_test()
+    #     return next(gen_obj)
+    #
+    # def gen_show(self, pred):
+    #     '''
+    #     Show the image generator object
+    #     '''
+    #     i=0
+    #     while(True):
+    #         image = self.on_next()
+    #         image = np.squeeze(image,axis=0)
+    #         cv2.imshow('image', image)
+    #         cv2.waitKey(0)
+    #         i+=1
 
-    def gen_show(self, pred):
-        i=0
-        while(True):
-            image = self.on_next()
-            image = np.squeeze(image,axis=0)
-            print(image.shape)
-            print(pred[i])
-            cv2.imshow('image', image)
-            cv2.waitKey(0)
-            i+=1
+    def gen_augment(self,batch_size,augment):
+        '''
+        Yields generator object with batching of batch_size and augmentation.
+        The number of examples for 1 batch will be multiplied based on the number of augmentation
 
-    def gen_augment(self,batch_size,n_augment):
+        augment represents [speckle, gaussian, poisson]. It means, the augmentation will be done on the augment list element that is 1
+        for example, augment = [1,1,0] corresponds to adding speckle noise and gaussian noise
+        if batch_size = 100, the number of examples in each batch will become 300
+
+        Args:
+            batch_size (int): batch_size
+            augment (list): list that defines what kind of augmentation we want to do
+        Yields:
+            feat_batch: np.array of (batch_size*n_augment,width,height,1) of images
+            label_batch: np.array of (batch_size*n_augment,num_labels)
+        '''
         feat = self.feat
         labels = self.labels
         width = self.width
@@ -104,28 +144,34 @@ class Generator():
             X.append(im)
         X = np.array(X)
 
+        n_augment = augment.count(1)
+        print('Number of augmentations: ', n_augment)
         feat_batch = np.zeros(((n_augment+1)*batch_size,width,height,1))
         label_batch = np.zeros(((n_augment+1)*batch_size,labels.shape[1]))
 
         while(True):
             i=0
             while (i<=batch_size):
-            # for i in range(batch_size):
                 index = np.random.randint(X.shape[0],size=1)[0] #shuffle the data
                 aug = ImageAugment(X[index])
                 feat_batch[i] = X[index]
                 label_batch[i] = labels[index]
-                # i=0
-                # while (i<n_augment):
-                # for j in range(n_augment):
-                    # feat_batch[(i*n_augment)+j+batch_size] = self.add_salt_pepper_noise(X[index])
-                j=0
-                feat_batch[(j*n_augment)+i+batch_size] = aug.add_speckle_noise()
-                label_batch[(j*n_augment)+i+batch_size] = labels[index]
 
-                j+=1
-                feat_batch[(j*n_augment)+i+batch_size] = aug.add_gaussian_noise()
-                label_batch[(j*n_augment)+i+batch_size] = labels[index]
+                j=0
+                if augment[0] == 1:
+                    feat_batch[(j*n_augment)+i+batch_size] = aug.add_speckle_noise()
+                    label_batch[(j*n_augment)+i+batch_size] = labels[index]
+                    j+=1
+
+                if augment[1] == 1:
+                    feat_batch[(j*n_augment)+i+batch_size] = aug.add_gaussian_noise()
+                    label_batch[(j*n_augment)+i+batch_size] = labels[index]
+                    j+=1
+
+                if augment[2] == 1:
+                    feat_batch[(j*n_augment)+i+batch_size] = aug.add_poisson_noise()
+                    label_batch[(j*n_augment)+i+batch_size] = labels[index]
+                    j+=1
 
                 i+=1
 
@@ -192,34 +238,30 @@ if __name__ == "__main__":
     print('len data: ', len(X_train))
     print('len test data: ', len(X_test))
 
-    n_augment = 2
+    #augment represents [speckle, gaussian, poisson]. It means, the augmentation will be done on the augment list element that is 1
+    #for example, augment = [1,1,0] corresponds to adding speckle noise and gaussian noise
+    augment = [1,1,1]
     model = CNN_model(width,height)
-    # model.fit_generator(image_gen.gen(), steps_per_epoch=1 ,epochs=50, verbose=1)
-    # model.fit_generator(
-    #                     generator=image_gen_train.gen_batching(batch_size=batch_size),
-    #                     steps_per_epoch=np.ceil(len(X_train)/batch_size),
-    #                     epochs=20,
-    #                     verbose=1,
-    #                     validation_data=image_gen_val.gen(),
-    #                     validation_steps=len(X_val)
-    #                     )
-    # model.fit_generator(
-    #                     generator=image_gen_train.gen_augment(batch_size=batch_size,n_augment=n_augment),
-    #                     steps_per_epoch=np.ceil(len(X_train)/batch_size),
-    #                     epochs=20,
-    #                     verbose=1,
-    #                     validation_data=image_gen_val.gen(),
-    #                     validation_steps=len(X_val)
-    #                     )
-    # model.save('model_aug_3.h5')
+
+    model.fit_generator(
+                        generator=image_gen_train.gen_augment(batch_size=batch_size,augment=augment),
+                        steps_per_epoch=np.ceil(len(X_train)/batch_size),
+                        epochs=20,
+                        verbose=1,
+                        validation_data=image_gen_val.gen(),
+                        validation_steps=len(X_val)
+                        )
+    model.save('model_aug_3.h5')
     model = tf.keras.models.load_model('model_aug_3.h5')
+
+    #Try evaluate_generator
     image_gen_test = Generator(X_test,y_test,width,height)
     print(model.evaluate_generator(
                             generator=image_gen_test.gen(),
                             steps=len(X_test)
                             ))
-    # print(X_test)
-    print(len(X_test))
+
+    #Try predict_generator
     image_gen_test = Generator(X_test,None,width,height)
     pred = model.predict_generator(
                             generator=image_gen_test.gen_test(),
