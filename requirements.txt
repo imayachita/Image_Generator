@@ -1,6 +1,6 @@
 pandas==0.25.0
 opencv_python==4.1.2.30
-numpy==1.17.2
+numpy==1.22.0
 matplotlib==3.1.1
 Keras==2.2.4
 tensorflow==1.12.0
